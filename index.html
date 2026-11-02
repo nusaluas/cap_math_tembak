@@ -1,0 +1,2147 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CS: MATH OPS - Tactical Arithmetic</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PeerJS for WebRTC Multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- jsPDF & AutoTable for PDF Report Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts: Orbitron & Rajdhani for Tactical HUD -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        tactical: ['Orbitron', 'sans-serif'],
+                        hud: ['Rajdhani', 'sans-serif'],
+                        mono: ['Share Tech Mono', 'monospace'],
+                    },
+                    colors: {
+                        cs: {
+                            bg: '#0a0e14',
+                            panel: '#121924',
+                            border: '#253347',
+                            amber: '#f59e0b',
+                            cyan: '#06b6d4',
+                            green: '#10b981',
+                            red: '#ef4444'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background-color: #0a0e14;
+            color: #e2e8f0;
+            font-family: 'Rajdhani', sans-serif;
+            overflow-x: hidden;
+        }
+        /* Tactical Scanline & Grid Background */
+        .bg-tactical-grid {
+            background-image: 
+                linear-gradient(to right, rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+        .scanlines::after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            z-index: 40;
+            pointer-events: none;
+        }
+        /* Crosshair Cursor on Canvas */
+        .cursor-crosshair-custom {
+            cursor: crosshair;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0e14;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #253347;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #f59e0b;
+        }
+        @keyframes pulse-border {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.6); }
+            50% { border-color: rgba(245, 158, 11, 1); }
+        }
+        .tactical-card {
+            background: rgba(18, 25, 36, 0.92);
+            border: 1px solid #253347;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+        }
+        .muzzle-flash {
+            animation: flash 0.08s ease-out;
+        }
+        @keyframes flash {
+            0% { background-color: rgba(245, 158, 11, 0.35); }
+            100% { background-color: transparent; }
+        }
+    </style>
+</head>
+<body class="bg-tactical-grid scanlines min-h-screen flex flex-col justify-between">
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- TOP NAVBAR / TACTICAL HEADER -->
+    <header class="border-b border-cs-border bg-cs-panel/90 backdrop-blur-md sticky top-0 z-30 px-4 py-2.5">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded bg-amber-500/20 border border-amber-500 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
+                    <i class="fa-solid fa-crosshairs text-xl animate-spin" style="animation-duration: 12s;"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-tactical font-black text-lg sm:text-xl tracking-wider text-white">CS: <span class="text-amber-500">MATH OPS</span></h1>
+                        <span class="text-[10px] font-mono uppercase bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-1.5 py-0.5 rounded">v2.5 P2P</span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Tactical Arithmetic Combat & Live Classroom Command</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button id="soundToggleBtn" onclick="SoundFX.toggleMute()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-mono flex items-center gap-1.5 transition">
+                    <i id="soundIcon" class="fa-solid fa-volume-high text-amber-400"></i>
+                    <span id="soundText" class="hidden sm:inline">AUDIO ON</span>
+                </button>
+                <button id="backHomeBtn" onclick="App.confirmResetToMenu()" class="hidden px-3 py-1.5 rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 text-xs font-mono flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>MARKAS UTAMA</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="flex-1 flex flex-col justify-center items-center p-3 sm:p-6 max-w-7xl w-full mx-auto relative">
+
+        <!-- ==========================================
+             VIEW 1: LANDING / ROLE SELECTION
+             ========================================== -->
+        <section id="viewRoleSelect" class="w-full max-w-4xl my-auto">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono mb-3">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                    SISTEM KOMANDO ARITMATIKA SIAP TEMPUR
+                </div>
+                <h2 class="font-tactical text-2xl sm:text-4xl font-extrabold text-white tracking-wide uppercase">PILIH DIVISI OPERASI</h2>
+                <p class="text-slate-400 mt-1 text-sm sm:text-base max-w-xl mx-auto">Hubungkan ruang kelas secara real-time dengan protokol PeerJS atau jalankan simulasi latihan mandiri.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <!-- COMMANDER / ADMIN -->
+                <div onclick="App.selectRole('admin')" class="tactical-card rounded-xl p-6 cursor-pointer group hover:border-amber-500 transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute -right-8 -top-8 w-28 h-28 bg-amber-500/10 rounded-full group-hover:scale-150 transition-transform"></div>
+                    <div>
+                        <div class="w-14 h-14 rounded-lg bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 text-2xl mb-4 group-hover:scale-110 transition">
+                            <i class="fa-solid fa-satellite-dish"></i>
+                        </div>
+                        <span class="text-xs font-mono uppercase text-amber-400 tracking-widest">Mode Guru / Host</span>
+                        <h3 class="font-tactical text-xl font-bold text-white mt-1">MARKAS KOMANDO (ADMIN)</h3>
+                        <p class="text-slate-400 text-sm mt-2 leading-relaxed">
+                            Buat Room Kode, pilih jenis operasi matematika, atur durasi waktu (5-60 menit), pantau soal yang sedang dikerjakan siswa secara langsung, dan unduh laporan PDF.
+                        </p>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-amber-400 font-mono text-xs">
+                        <span>BUKA SERVER KOMANDO</span>
+                        <i class="fa-solid fa-chevron-right group-hover:translate-x-1 transition"></i>
+                    </div>
+                </div>
+
+                <!-- SOLDIER / PLAYER -->
+                <div onclick="App.selectRole('player')" class="tactical-card rounded-xl p-6 cursor-pointer group hover:border-cyan-400 transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute -right-8 -top-8 w-28 h-28 bg-cyan-500/10 rounded-full group-hover:scale-150 transition-transform"></div>
+                    <div>
+                        <div class="w-14 h-14 rounded-lg bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center text-cyan-400 text-2xl mb-4 group-hover:scale-110 transition">
+                            <i class="fa-solid fa-person-rifle"></i>
+                        </div>
+                        <span class="text-xs font-mono uppercase text-cyan-400 tracking-widest">Mode Siswa / Client</span>
+                        <h3 class="font-tactical text-xl font-bold text-white mt-1">PRAJURIT TEMPUR (PEMAIN)</h3>
+                        <p class="text-slate-400 text-sm mt-2 leading-relaxed">
+                            Masukkan Kode Markas dari Guru/Admin via PeerJS. Bidik dan tembak teroris yang membawa jawaban tepat sebelum waktu habis!
+                        </p>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-cyan-400 font-mono text-xs">
+                        <span>GABUNG KE ROOM</span>
+                        <i class="fa-solid fa-chevron-right group-hover:translate-x-1 transition"></i>
+                    </div>
+                </div>
+
+                <!-- SOLO PRACTICE -->
+                <div onclick="App.selectRole('solo')" class="tactical-card rounded-xl p-6 cursor-pointer group hover:border-emerald-400 transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute -right-8 -top-8 w-28 h-28 bg-emerald-500/10 rounded-full group-hover:scale-150 transition-transform"></div>
+                    <div>
+                        <div class="w-14 h-14 rounded-lg bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-2xl mb-4 group-hover:scale-110 transition">
+                            <i class="fa-solid fa-bullseye"></i>
+                        </div>
+                        <span class="text-xs font-mono uppercase text-emerald-400 tracking-widest">Simulasi Offline</span>
+                        <h3 class="font-tactical text-xl font-bold text-white mt-1">LATIHAN MANDIRI (SOLO)</h3>
+                        <p class="text-slate-400 text-sm mt-2 leading-relaxed">
+                            Uji ketangkasan berhitung dan menembak tanpa perlu kode admin. Bebas memilih operasi matematika dan waktu latihan sendiri.
+                        </p>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-emerald-400 font-mono text-xs">
+                        <span>MULAI SIMULASI</span>
+                        <i class="fa-solid fa-chevron-right group-hover:translate-x-1 transition"></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             VIEW 2: ADMIN / COMMAND CENTER
+             ========================================== -->
+        <section id="viewAdmin" class="hidden w-full space-y-5">
+            <!-- Top Row: Room Code + Controls -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                
+                <!-- Room Code & Connection Box -->
+                <div class="lg:col-span-4 tactical-card rounded-xl p-5 flex flex-col justify-between border-l-4 border-l-amber-500">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-mono uppercase text-amber-400 tracking-wider">KODE ROOM PEERJS</span>
+                            <span id="adminPeerStatus" class="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">Menghubungkan...</span>
+                        </div>
+                        
+                        <div class="my-4 p-4 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+                            <span id="adminRoomCodeDisplay" class="font-tactical text-3xl sm:text-4xl font-black tracking-widest text-amber-400 select-all">------</span>
+                            <button onclick="AdminController.copyRoomCode()" class="px-3 py-2 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-mono flex items-center gap-1.5 transition">
+                                <i class="fa-regular fa-copy"></i> SALIN
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-400">Bagikan 6 karakter kode di atas kepada siswa agar mereka dapat terhubung ke markas komando Anda.</p>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
+                        <span class="text-slate-400">PASUKAN TERHUBUNG:</span>
+                        <span id="connectedPlayersCount" class="text-lg font-bold text-cyan-400">0 Siswa</span>
+                    </div>
+                </div>
+
+                <!-- Mission Configuration Box -->
+                <div class="lg:col-span-8 tactical-card rounded-xl p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-800">
+                        <div>
+                            <h3 class="font-tactical text-lg font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-sliders text-amber-400"></i> KONFIGURASI MISI MATEMATIKA
+                            </h3>
+                            <p class="text-xs text-slate-400">Pilih operasi soal (Unlimited Generator) dan durasi pertempuran</p>
+                        </div>
+                        <!-- Timer Display when Active -->
+                        <div id="adminTimerBadge" class="px-4 py-1.5 rounded-lg bg-slate-950 border border-slate-700 font-mono text-xl font-bold text-amber-400">
+                            <i class="fa-regular fa-clock mr-1"></i> <span id="adminCountdownText">10:00</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Operation Type Selector -->
+                        <div>
+                            <label class="block text-xs font-mono uppercase text-slate-300 mb-1.5">JENIS OPERASI SOAL (DAPAT DIUBAH LIVE):</label>
+                            <select id="adminOpSelect" onchange="AdminController.broadcastConfigUpdate()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2.5 text-sm text-white font-medium outline-none">
+                                <option value="perkalian">1. Perkalian Dasar (Angka 1 - 10)</option>
+                                <option value="penjumlahan">2. Penambahan (3 Digit + 3 Digit)</option>
+                                <option value="pengurangan">3. Pengurangan (3 Digit - 3 Digit)</option>
+                                <option value="pembagian">4. Pembagian (2 Digit Habis Dibagi)</option>
+                                <option value="campuran">5. Operasi Campuran (Arimatika Dasar)</option>
+                                <option value="cerita">6. Soal Cerita: Transaksi Kios Kampung</option>
+                                <option value="semua" selected>7. Semua Mode Acak (Kombinasi Lengkap)</option>
+                            </select>
+                            <p class="text-[11px] text-slate-400 mt-1">Soal digenerate secara *unlimited* dan otomatis berganti tiap dijawab.</p>
+                        </div>
+
+                        <!-- Custom Time Slider & Input (5 - 60 Mins) -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1.5">
+                                <label class="text-xs font-mono uppercase text-slate-300">DURASI WAKTU PERMAINAN:</label>
+                                <span class="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                                    <span id="adminDurationLabel">10</span> MENIT
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input id="adminDurationSlider" type="range" min="5" max="60" step="1" value="10" 
+                                    oninput="AdminController.syncDuration(this.value)"
+                                    class="w-full accent-amber-500 cursor-pointer h-2 bg-slate-800 rounded-lg">
+                                <input id="adminDurationInput" type="number" min="5" max="60" value="10"
+                                    onchange="AdminController.syncDuration(this.value)"
+                                    class="w-16 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-center font-mono text-sm text-amber-400">
+                            </div>
+                            <div class="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+                                <span>Min: 5 Menit</span>
+                                <span>15m</span>
+                                <span>30m</span>
+                                <span>45m</span>
+                                <span>Max: 60 Menit</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mission Action Buttons -->
+                    <div class="mt-5 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="btnStartMission" onclick="AdminController.startMission()" class="px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-tactical font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition">
+                                <i class="fa-solid fa-play"></i> MULAI MISI TEMPUR
+                            </button>
+                            <button id="btnStopMission" onclick="AdminController.stopMission()" disabled class="px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 disabled:opacity-40 border border-red-500/40 text-red-300 font-tactical font-bold text-sm flex items-center gap-2 transition">
+                                <i class="fa-solid fa-stop"></i> HENTIKAN MISI
+                            </button>
+                        </div>
+
+                        <button onclick="AdminController.exportPDF()" class="px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-tactical font-bold text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition">
+                            <i class="fa-solid fa-file-pdf"></i> DOWNLOAD HASIL (jsPDF)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LIVEBOARD MONITOR TABLE -->
+            <div class="tactical-card rounded-xl p-5">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <h3 class="font-tactical text-lg font-bold text-white tracking-wide">LIVEBOARD PEMANTAUAN SISWA REAL-TIME</h3>
+                    </div>
+                    <div class="text-xs font-mono text-slate-400">
+                        Memantau soal aktif yang sedang dikerjakan siswa & perolehan skor langsung
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400 bg-slate-900/60">
+                                <th class="py-3 px-3">Rank</th>
+                                <th class="py-3 px-3">Nama Prajurit (Siswa)</th>
+                                <th class="py-3 px-3">Status</th>
+                                <th class="py-3 px-3">Soal Sedang Dikerjakan (Live)</th>
+                                <th class="py-3 px-3">Aksi Terakhir</th>
+                                <th class="py-3 px-3 text-center">Benar / Salah</th>
+                                <th class="py-3 px-3 text-center">Akurasi</th>
+                                <th class="py-3 px-3 text-right">Skor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="liveboardTableBody" class="divide-y divide-slate-800/70 text-sm">
+                            <tr>
+                                <td colspan="8" class="py-10 text-center text-slate-500 font-mono">
+                                    Belum ada prajurit siswa yang bergabung. Bagikan Kode Room di atas!
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             VIEW 3: PLAYER / SOLO LOBBY SETUP
+             ========================================== -->
+        <section id="viewPlayerLobby" class="hidden w-full max-w-lg my-auto">
+            <div class="tactical-card rounded-xl p-6 sm:p-8 border-t-4 border-t-cyan-400">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-12 h-12 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 text-xl">
+                        <i class="fa-solid fa-helmet-safety"></i>
+                    </div>
+                    <div>
+                        <span id="lobbyModeBadge" class="text-xs font-mono uppercase text-cyan-400">PENDAFTARAN PRAJURIT</span>
+                        <h3 id="lobbyTitle" class="font-tactical text-2xl font-bold text-white">GABUNG KE SERVER</h3>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-mono uppercase text-slate-300 mb-1">NAMA LENGKAP / CALLSIGN SISWA:</label>
+                        <input id="playerNameInput" type="text" maxlength="25" placeholder="Contoh: Budi Santoso - Kelas 5A" 
+                            class="w-full bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-lg px-4 py-3 text-white font-medium outline-none">
+                    </div>
+
+                    <!-- Multiplayer Room Code Input -->
+                    <div id="multiplayerCodeGroup">
+                        <label class="block text-xs font-mono uppercase text-slate-300 mb-1">KODE ROOM ADMIN (6 KARAKTER):</label>
+                        <input id="playerRoomCodeInput" type="text" maxlength="8" placeholder="Contoh: CS894A" 
+                            class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg px-4 py-3 text-amber-400 font-tactical text-xl tracking-widest uppercase outline-none">
+                    </div>
+
+                    <!-- Solo Configuration Group -->
+                    <div id="soloConfigGroup" class="hidden space-y-4 pt-2 border-t border-slate-800">
+                        <div>
+                            <label class="block text-xs font-mono uppercase text-slate-300 mb-1">PILIH OPERASI MATEMATIKA:</label>
+                            <select id="soloOpSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white outline-none">
+                                <option value="semua">Semua Mode Acak (Kombinasi Lengkap)</option>
+                                <option value="perkalian">Perkalian (1 - 10)</option>
+                                <option value="penjumlahan">Penambahan (3 Digit)</option>
+                                <option value="pengurangan">Pengurangan (3 Digit)</option>
+                                <option value="pembagian">Pembagian (2 Digit)</option>
+                                <option value="campuran">Operasi Campuran</option>
+                                <option value="cerita">Soal Cerita: Transaksi Kios Kampung</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs font-mono mb-1">
+                                <span class="text-slate-300">DURASI SIMULASI:</span>
+                                <span class="text-emerald-400 font-bold"><span id="soloDurationLabel">10</span> MENIT</span>
+                            </div>
+                            <input id="soloDurationSlider" type="range" min="5" max="60" value="10" 
+                                oninput="document.getElementById('soloDurationLabel').innerText = this.value"
+                                class="w-full accent-emerald-400 cursor-pointer">
+                        </div>
+                    </div>
+
+                    <!-- Waiting Room Status Box -->
+                    <div id="playerWaitingBox" class="hidden p-4 rounded-lg bg-amber-500/10 border border-amber-500/40 text-center space-y-2">
+                        <i class="fa-solid fa-satellite-dish text-amber-400 text-2xl animate-bounce"></i>
+                        <p id="playerWaitingText" class="text-sm font-medium text-amber-200">Terhubung ke Markas! Menunggu Guru/Admin memulai misi...</p>
+                        <p class="text-xs font-mono text-slate-400">Siapkan bidikanmu, misi akan otomatis dimulai!</p>
+                    </div>
+
+                    <button id="btnJoinOrStart" onclick="PlayerController.submitLobby()" class="w-full py-3.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-tactical font-bold text-base tracking-wider shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-crosshairs"></i> <span id="btnJoinText">HUBUNGKAN KE MARKAS</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             VIEW 4: COUNTER STRIKE FPS ARENA
+             ========================================== -->
+        <section id="viewGameArena" class="hidden w-full max-w-6xl">
+            <div class="tactical-card rounded-xl overflow-hidden border-2 border-slate-700 relative">
+                
+                <!-- TOP TACTICAL HUD BAR -->
+                <div class="bg-slate-950/95 border-b border-slate-800 px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <!-- Player Info & Mode -->
+                    <div class="flex items-center gap-3">
+                        <span class="px-2.5 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400 font-mono text-xs font-bold" id="hudOpBadge">
+                            MODE: CAMPURAN
+                        </span>
+                        <span class="text-xs font-mono text-slate-300 hidden md:inline" id="hudPlayerName">PRAJURIT</span>
+                    </div>
+
+                    <!-- Countdown Timer -->
+                    <div class="flex items-center gap-2 bg-slate-900 border border-slate-700 px-3.5 py-1 rounded-lg">
+                        <i class="fa-regular fa-clock text-amber-400 text-sm"></i>
+                        <span id="hudTimer" class="font-mono text-lg sm:text-xl font-bold text-white tracking-wider">10:00</span>
+                    </div>
+
+                    <!-- Score & Combo Streak -->
+                    <div class="flex items-center gap-4">
+                        <div class="text-right">
+                            <span class="text-[10px] font-mono text-slate-400 block leading-none">STREAK</span>
+                            <span id="hudStreak" class="font-tactical text-sm font-bold text-cyan-400">0x</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] font-mono text-slate-400 block leading-none">SKOR TEMPUR</span>
+                            <span id="hudScore" class="font-tactical text-lg sm:text-xl font-black text-emerald-400">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- QUESTION BRIEFING BANNER (TOP OVERLAY) -->
+                <div class="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-b-2 border-amber-500/60 px-4 py-3 text-center relative">
+                    <div class="max-w-4xl mx-auto">
+                        <span id="hudQuestionCategory" class="text-[11px] font-mono uppercase tracking-widest text-amber-400 block mb-0.5">
+                            TARGET ARITMATIKA AKTIF — TEMBAK TERORIS DENGAN JAWABAN BENAR!
+                        </span>
+                        <div id="hudQuestionText" class="font-hud font-bold text-lg sm:text-2xl md:text-3xl text-white leading-snug">
+                            Memuat Soal Taktis...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FPS CANVAS CONTAINER -->
+                <div id="canvasWrapper" class="relative w-full h-[380px] sm:h-[450px] md:h-[500px] bg-slate-950 overflow-hidden cursor-crosshair-custom">
+                    <canvas id="csCanvas" class="w-full h-full block"></canvas>
+
+                    <!-- Floating Damage / Feedback Overlay -->
+                    <div id="hudFeedbackOverlay" class="pointer-events-none absolute inset-0 flex items-center justify-center"></div>
+                </div>
+
+                <!-- BOTTOM TACTICAL BAR (QUICK TOUCH BUTTONS + AMMO + RELOAD) -->
+                <div class="bg-slate-950/95 border-t border-slate-800 px-3 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+                    <!-- Armor & HP Status -->
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-heart-pulse text-red-500"></i>
+                            <span id="hudHP" class="font-mono text-base font-bold text-white">100</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                            <span class="font-mono text-xs text-slate-300">KEVLAR AKTIF</span>
+                        </div>
+                    </div>
+
+                    <!-- Quick Target Lock Buttons (Helpful on Mobile Touchscreens) -->
+                    <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center">
+                        <span class="text-[11px] font-mono text-slate-400 mr-1 hidden sm:inline">TEMBAK CEPAT:</span>
+                        <div id="quickFireButtons" class="flex items-center gap-2"></div>
+                    </div>
+
+                    <!-- Weapon & Ammo Info -->
+                    <div class="flex items-center gap-3">
+                        <div class="text-right font-mono">
+                            <span class="text-[10px] text-slate-400 block">M4A1-MATH</span>
+                            <span id="hudAmmo" class="text-base font-bold text-amber-400">30 / ∞</span>
+                        </div>
+                        <button onclick="GameEngine.reloadWeapon()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-mono text-amber-400 transition">
+                            <i class="fa-solid fa-rotate"></i> RELOAD
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             MODAL: GAME OVER / MISSION REPORT
+             ========================================== -->
+        <div id="modalGameOver" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="tactical-card rounded-xl max-w-md w-full p-6 border-2 border-amber-500 text-center space-y-5">
+                <div class="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500 mx-auto flex items-center justify-center text-amber-400 text-3xl">
+                    <i class="fa-solid fa-medal"></i>
+                </div>
+                <div>
+                    <span class="text-xs font-mono uppercase text-amber-400">LAPORAN AKHIR OPERASI</span>
+                    <h3 class="font-tactical text-2xl font-black text-white mt-1">MISI SELESAI!</h3>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 bg-slate-950 p-4 rounded-lg border border-slate-800 font-mono">
+                    <div>
+                        <span class="text-xs text-slate-400 block">SKOR AKHIR</span>
+                        <span id="finalScoreText" class="text-2xl font-bold text-emerald-400">0</span>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 block">AKURASI TEMBAKAN</span>
+                        <span id="finalAccuracyText" class="text-2xl font-bold text-cyan-400">0%</span>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 block">TARGET BENAR</span>
+                        <span id="finalCorrectText" class="text-lg font-bold text-white">0</span>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 block">MELESET / SALAH</span>
+                        <span id="finalWrongText" class="text-lg font-bold text-red-400">0</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <button onclick="PlayerController.downloadPersonalPDF()" class="flex-1 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-tactical font-bold text-xs flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-file-pdf"></i> UNDUH SERTIFIKAT PDF
+                    </button>
+                    <button onclick="App.resetToMenu()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-tactical font-bold text-xs">
+                        KEMBALI KE MENU
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             MODAL: ADMIN PASSWORD
+             ========================================== -->
+        <div id="modalAdminAuth" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="tactical-card rounded-xl max-w-sm w-full p-6 border border-slate-700 text-center space-y-4">
+                <div class="w-12 h-12 rounded-full bg-red-500/20 border border-red-500 mx-auto flex items-center justify-center text-red-400 text-2xl mb-2">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h3 class="font-tactical text-xl font-bold text-white">OTORISASI KOMANDO</h3>
+                <p class="text-xs text-slate-400 font-mono">Masukkan kata sandi untuk mengakses Markas (Admin).</p>
+                <input id="adminPasswordInput" type="password" placeholder="Kata Sandi" class="w-full bg-slate-950 border border-slate-700 focus:border-red-500 rounded-lg px-4 py-2 text-center text-white font-medium outline-none">
+                <div class="flex gap-2 pt-2">
+                    <button onclick="document.getElementById('modalAdminAuth').classList.add('hidden')" class="flex-1 py-2 rounded bg-slate-800 hover:bg-slate-700 text-white font-tactical text-xs">BATAL</button>
+                    <button onclick="App.verifyAdminAuth()" class="flex-1 py-2 rounded bg-red-600 hover:bg-red-500 text-white font-tactical text-xs">AKSES</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-slate-800/80 py-3 px-4 text-center text-xs font-mono text-slate-500">
+        CS: MATH OPS • Unlimited Arithmetic Engine (Perkalian 1-10, Penjumlahan/Pengurangan 3 Digit, Pembagian 2 Digit, Campuran & Kios Kampung) • PeerJS Live Sync
+    </footer>
+
+    <!-- ==========================================
+         JAVASCRIPT ENGINE & LOGIC
+         ========================================== -->
+    <script>
+        /* =========================================================
+           1. WEB AUDIO SYNTHESIZER (TACTICAL SOUND EFFECTS)
+           ========================================================= */
+        const SoundFX = {
+            ctx: null,
+            muted: false,
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            toggleMute() {
+                this.muted = !this.muted;
+                const icon = document.getElementById('soundIcon');
+                const text = document.getElementById('soundText');
+                if (this.muted) {
+                    icon.className = 'fa-solid fa-volume-xmark text-slate-400';
+                    text.innerText = 'AUDIO OFF';
+                } else {
+                    this.init();
+                    icon.className = 'fa-solid fa-volume-high text-amber-400';
+                    text.innerText = 'AUDIO ON';
+                    this.playBeep(660, 0.08);
+                }
+            },
+
+            playGunshot() {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const now = this.ctx.currentTime;
+                    // White noise burst for rifle shot
+                    const bufferSize = this.ctx.sampleRate * 0.14;
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.035));
+                    }
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(1200, now);
+
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.5, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    noise.start(now);
+                } catch (e) {}
+            },
+
+            playHitConfirm() {
+                if (this.muted) return;
+                this.init();
+                this.playBeep(880, 0.07);
+                setTimeout(() => this.playBeep(1320, 0.12), 70);
+            },
+
+            playWrongHit() {
+                if (this.muted) return;
+                this.init();
+                this.playBeep(190, 0.2, 'sawtooth');
+            },
+
+            playReload() {
+                if (this.muted) return;
+                this.init();
+                this.playBeep(400, 0.05, 'triangle');
+                setTimeout(() => this.playBeep(520, 0.06, 'triangle'), 140);
+            },
+
+            playBeep(freq = 440, duration = 0.1, type = 'sine') {
+                if (this.muted) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, now);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + duration);
+                } catch (e) {}
+            }
+        };
+
+        /* =========================================================
+           2. UNLIMITED MATH QUESTION GENERATOR
+           ========================================================= */
+        const MathGenerator = {
+            randInt(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            },
+
+            pickRandom(arr) {
+                return arr[Math.floor(Math.random() * arr.length)];
+            },
+
+            generate(mode = 'semua') {
+                const availableModes = ['perkalian', 'penjumlahan', 'pengurangan', 'pembagian', 'campuran', 'cerita'];
+                const activeMode = (mode === 'semua') ? this.pickRandom(availableModes) : mode;
+
+                let questionText = '';
+                let answer = 0;
+                let categoryLabel = '';
+
+                switch (activeMode) {
+                    case 'perkalian': {
+                        // Perkalian dasar 1 - 10
+                        const a = this.randInt(1, 10);
+                        const b = this.randInt(1, 10);
+                        answer = a * b;
+                        questionText = `${a} × ${b} = ?`;
+                        categoryLabel = 'PERKALIAN (1 - 10)';
+                        break;
+                    }
+
+                    case 'penjumlahan': {
+                        // Penambahan 3 digit (100 - 999)
+                        const a = this.randInt(100, 899);
+                        const b = this.randInt(100, 899);
+                        answer = a + b;
+                        questionText = `${a} + ${b} = ?`;
+                        categoryLabel = 'PENAMBAHAN (3 DIGIT)';
+                        break;
+                    }
+
+                    case 'pengurangan': {
+                        // Pengurangan 3 digit (hasil selalu positif)
+                        const a = this.randInt(300, 999);
+                        const b = this.randInt(100, a - 25);
+                        answer = a - b;
+                        questionText = `${a} - ${b} = ?`;
+                        categoryLabel = 'PENGURANGAN (3 DIGIT)';
+                        break;
+                    }
+
+                    case 'pembagian': {
+                        // Pembagian 2 digit (10 - 99) habis dibagi tanpa sisa
+                        const pairs = [];
+                        for (let dividend = 10; dividend <= 99; dividend++) {
+                            for (let divisor = 2; divisor <= 12; divisor++) {
+                                if (dividend % divisor === 0) {
+                                    pairs.push({ dividend, divisor, quotient: dividend / divisor });
+                                }
+                            }
+                        }
+                        const chosen = this.pickRandom(pairs);
+                        answer = chosen.quotient;
+                        questionText = `${chosen.dividend} ÷ ${chosen.divisor} = ?`;
+                        categoryLabel = 'PEMBAGIAN (2 DIGIT)';
+                        break;
+                    }
+
+                    case 'campuran': {
+                        // Operasi campuran aritmatika dasar
+                        const pattern = this.randInt(1, 4);
+                        if (pattern === 1) {
+                            const a = this.randInt(120, 450);
+                            const b = this.randInt(2, 9);
+                            const c = this.randInt(2, 9);
+                            answer = a + (b * c);
+                            questionText = `${a} + (${b} × ${c}) = ?`;
+                        } else if (pattern === 2) {
+                            const a = this.randInt(250, 750);
+                            const b = this.randInt(100, 220);
+                            const c = this.randInt(2, 9) * this.randInt(2, 8);
+                            answer = (a - b) + c;
+                            questionText = `(${a} - ${b}) + ${c} = ?`;
+                        } else if (pattern === 3) {
+                            const divisor = this.randInt(2, 9);
+                            const quotient = this.randInt(4, 11);
+                            const dividend = divisor * quotient;
+                            const mult = this.randInt(3, 9);
+                            answer = (dividend / divisor) * mult;
+                            questionText = `(${dividend} ÷ ${divisor}) × ${mult} = ?`;
+                        } else {
+                            const a = this.randInt(3, 10);
+                            const b = this.randInt(3, 10);
+                            const c = this.randInt(100, 350);
+                            answer = (a * b) + c;
+                            questionText = `(${a} × ${b}) + ${c} = ?`;
+                        }
+                        categoryLabel = 'OPERASI CAMPURAN';
+                        break;
+                    }
+
+                    case 'cerita': {
+                        // Soal cerita transaksi di kios kampung
+                        const buyers = ['Budi', 'Siti', 'Rian', 'Ayu', 'Doni', 'Lestari', 'Fajar', 'Nisa'];
+                        const owners = ['Warung Pak RT', 'Kios Bu Tejo', 'Kios Wak Doyok', 'Warung Mak Ijah', 'Kios Bang Jali'];
+                        const items = [
+                            { name: 'bungkus mie instan', unit: 'bungkus' },
+                            { name: 'butir telur ayam', unit: 'butir' },
+                            { name: 'bungkus roti cokelat', unit: 'bungkus' },
+                            { name: 'kotak susu cair', unit: 'kotak' },
+                            { name: 'botol air mineral', unit: 'botol' },
+                            { name: 'kemasan kopi saset', unit: 'kemasan' }
+                        ];
+
+                        const buyer = this.pickRandom(buyers);
+                        const owner = this.pickRandom(owners);
+                        const item = this.pickRandom(items);
+                        const scenario = this.randInt(1, 4);
+
+                        if (scenario === 1) {
+                            // Beli beberapa barang dengan harga satuan
+                            const qty = this.randInt(3, 9);
+                            const price = this.randInt(2, 9);
+                            answer = qty * price;
+                            questionText = `Di ${owner}, ${buyer} membeli ${qty} ${item.name} seharga ${price} ribu rupiah per ${item.unit}. Berapa ribu rupiah total yang harus dibayar ${buyer}?`;
+                        } else if (scenario === 2) {
+                            // Kembalian belanja (3 digit pengurangan)
+                            const totalBelanja = this.randInt(125, 450);
+                            const uangBayar = this.pickRandom([500, 600, 750, 900]);
+                            answer = uangBayar - totalBelanja;
+                            questionText = `${buyer} berbelanja sembako di ${owner} habis ${totalBelanja} poin koin. Jika ia membayar dengan ${uangBayar} poin koin, berapa kembaliannya?`;
+                        } else if (scenario === 3) {
+                            // Stok barang kios (3 digit penjumlahan)
+                            const stokAwal = this.randInt(120, 480);
+                            const kirimanBaru = this.randInt(110, 390);
+                            answer = stokAwal + kirimanBaru;
+                            questionText = `${owner} memiliki stok ${stokAwal} ${item.name}, lalu datang kiriman baru sebanyak ${kirimanBaru} ${item.unit}. Berapa total stok di kios sekarang?`;
+                        } else {
+                            // Pembagian paket belanjaan (2 digit pembagian)
+                            const kantong = this.randInt(3, 9);
+                            const isiPerKantong = this.randInt(4, 11);
+                            const totalBarang = kantong * isiPerKantong;
+                            answer = isiPerKantong;
+                            questionText = `${owner} mengemas ${totalBarang} ${item.name} sama rata ke dalam ${kantong} kantong plastik. Berapa ${item.unit} isi setiap kantong?`;
+                        }
+                        categoryLabel = 'TRANSAKSI KIOS KAMPUNG';
+                        break;
+                    }
+                }
+
+                // Generate 3 plausible distractors
+                const options = new Set([answer]);
+                while (options.size < 4) {
+                    const offsetType = this.randInt(1, 3);
+                    let fake;
+                    if (offsetType === 1) {
+                        fake = answer + this.pickRandom([-10, -5, -2, -1, 1, 2, 5, 10]);
+                    } else if (offsetType === 2) {
+                        fake = answer + this.randInt(-25, 25);
+                    } else {
+                        fake = answer + this.pickRandom([-100, -20, 20, 100]);
+                    }
+                    if (fake > 0 && fake !== answer) {
+                        options.add(fake);
+                    } else {
+                        options.add(answer + options.size + 2);
+                    }
+                }
+
+                const shuffledOptions = Array.from(options).sort(() => Math.random() - 0.5);
+
+                return {
+                    mode: activeMode,
+                    category: categoryLabel,
+                    question: questionText,
+                    answer: answer,
+                    options: shuffledOptions
+                };
+            }
+        };
+
+        /* =========================================================
+           3. MAIN APPLICATION STATE & VIEW ROUTER
+           ========================================================= */
+        const App = {
+            currentRole: null,
+
+            showToast(message, type = 'info') {
+                const container = document.getElementById('toastContainer');
+                const colors = {
+                    info: 'border-cyan-500 bg-slate-900/95 text-cyan-300',
+                    success: 'border-emerald-500 bg-slate-900/95 text-emerald-300',
+                    warning: 'border-amber-500 bg-slate-900/95 text-amber-300',
+                    error: 'border-red-500 bg-slate-900/95 text-red-300'
+                };
+                const toast = document.createElement('div');
+                toast.className = `px-4 py-3 rounded-lg border-l-4 shadow-xl font-mono text-xs flex items-center gap-2.5 transition-all duration-300 ${colors[type] || colors.info}`;
+                toast.innerHTML = `<i class="fa-solid fa-terminal"></i> <span>${message}</span>`;
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3500);
+            },
+
+            switchView(viewId) {
+                ['viewRoleSelect', 'viewAdmin', 'viewPlayerLobby', 'viewGameArena'].forEach(id => {
+                    document.getElementById(id).classList.add('hidden');
+                });
+                document.getElementById(viewId).classList.remove('hidden');
+
+                const backBtn = document.getElementById('backHomeBtn');
+                if (viewId === 'viewRoleSelect') {
+                    backBtn.classList.add('hidden');
+                } else {
+                    backBtn.classList.remove('hidden');
+                }
+            },
+
+            selectRole(role) {
+                SoundFX.init();
+                SoundFX.playBeep(520, 0.08);
+
+                if (role === 'admin') {
+                    document.getElementById('adminPasswordInput').value = '';
+                    document.getElementById('modalAdminAuth').classList.remove('hidden');
+                    return;
+                }
+
+                this.currentRole = role;
+
+                if (role === 'player') {
+                    this.switchView('viewPlayerLobby');
+                    PlayerController.setupLobbyUI(false);
+                } else if (role === 'solo') {
+                    this.switchView('viewPlayerLobby');
+                    PlayerController.setupLobbyUI(true);
+                }
+            },
+
+            verifyAdminAuth() {
+                const pass = document.getElementById('adminPasswordInput').value;
+                if (pass === 'majapahit') {
+                    document.getElementById('modalAdminAuth').classList.add('hidden');
+                    this.currentRole = 'admin';
+                    this.switchView('viewAdmin');
+                    AdminController.initHost();
+                    this.showToast('Akses Markas Komando Diberikan!', 'success');
+                } else {
+                    this.showToast('Akses Ditolak! Kata sandi salah.', 'error');
+                }
+            },
+
+            confirmResetToMenu() {
+                this.resetToMenu();
+            },
+
+            resetToMenu() {
+                GameEngine.stopLoop();
+                AdminController.cleanup();
+                PlayerController.cleanup();
+                document.getElementById('modalGameOver').classList.add('hidden');
+                this.switchView('viewRoleSelect');
+            }
+        };
+
+        /* =========================================================
+           4. ADMIN / COMMAND CENTER CONTROLLER (PEERJS HOST)
+           ========================================================= */
+        const AdminController = {
+            peer: null,
+            roomCode: '',
+            connections: {}, // peerId -> conn
+            players: {},     // peerId -> { id, name, score, correct, wrong, currentQuestion, lastAction, status }
+            missionActive: false,
+            durationMinutes: 10,
+            remainingSeconds: 600,
+            timerInterval: null,
+            currentProblem: null,
+            problemLocked: false,
+
+            generateShortCode() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let code = 'CS';
+                for (let i = 0; i < 4; i++) {
+                    code += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return code;
+            },
+
+            initHost() {
+                this.cleanup();
+                this.roomCode = this.generateShortCode();
+                document.getElementById('adminRoomCodeDisplay').innerText = this.roomCode;
+                document.getElementById('adminPeerStatus').innerText = 'Menghubungkan Server...';
+
+                const fullPeerId = `CSMATH-HOST-${this.roomCode}`;
+                this.peer = new Peer(fullPeerId);
+
+                this.peer.on('open', () => {
+                    document.getElementById('adminPeerStatus').innerText = 'ONLINE (SIAP)';
+                    document.getElementById('adminPeerStatus').className = 'text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+                    App.showToast(`Markas Komando Aktif! Kode Room: ${this.roomCode}`, 'success');
+                });
+
+                this.peer.on('connection', (conn) => {
+                    this.handleIncomingConnection(conn);
+                });
+
+                this.peer.on('error', (err) => {
+                    if (err.type === 'unavailable-id') {
+                        this.initHost();
+                    } else {
+                        App.showToast(`Status Jaringan PeerJS: ${err.type}`, 'warning');
+                    }
+                });
+
+                this.syncDuration(document.getElementById('adminDurationSlider').value);
+                this.renderLiveboard();
+            },
+
+            handleIncomingConnection(conn) {
+                this.connections[conn.peer] = conn;
+
+                conn.on('data', (data) => {
+                    if (!data || !data.type) return;
+
+                    if (data.type === 'REGISTER_PLAYER') {
+                        this.players[conn.peer] = {
+                            id: conn.peer,
+                            name: data.name || 'Prajurit Tanpa Nama',
+                            score: 0,
+                            correct: 0,
+                            wrong: 0,
+                            currentQuestion: 'Menunggu komando mulai...',
+                            lastAction: 'Bergabung ke Lobby',
+                            status: this.missionActive ? 'TEMPUR' : 'SIAGA'
+                        };
+                        App.showToast(`${data.name} bergabung ke Markas!`, 'info');
+                        this.renderLiveboard();
+
+                        // Send current mission config immediately
+                        conn.send({
+                            type: 'ROOM_STATE',
+                            missionActive: this.missionActive,
+                            operation: document.getElementById('adminOpSelect').value,
+                            remainingSeconds: this.remainingSeconds
+                        });
+                        
+                        // If mission is active, send current question
+                        if (this.missionActive && this.currentProblem) {
+                            conn.send({
+                                type: 'NEW_QUESTION',
+                                problem: this.currentProblem
+                            });
+                        }
+                    } else if (data.type === 'PLAYER_TELEMETRY') {
+                        if (!this.players[conn.peer]) {
+                            this.players[conn.peer] = { id: conn.peer, name: data.name || 'Siswa' };
+                        }
+                        const p = this.players[conn.peer];
+                        p.name = data.name || p.name;
+                        p.score = data.score ?? p.score;
+                        p.correct = data.correct ?? p.correct;
+                        p.wrong = data.wrong ?? p.wrong;
+                        p.currentQuestion = data.currentQuestion || p.currentQuestion;
+                        p.lastAction = data.lastAction || p.lastAction;
+                        p.status = data.status || 'TEMPUR';
+                        this.renderLiveboard();
+                    } else if (data.type === 'CLAIM_ANSWER') {
+                        if (this.missionActive && this.currentProblem && data.question === this.currentProblem.question && !this.problemLocked) {
+                            this.problemLocked = true; // Lock the problem so only 1 winner gets it
+                            const p = this.players[conn.peer];
+                            if (p) {
+                                p.streak = (p.streak || 0) + 1;
+                                const bonus = Math.min(50, (p.streak - 1) * 10);
+                                const pointsEarned = 100 + bonus;
+                                p.score += pointsEarned;
+                                p.correct++;
+                                p.lastAction = `Menjawab Tercepat (+${pointsEarned})`;
+                                this.renderLiveboard();
+
+                                this.broadcast({
+                                    type: 'QUESTION_SOLVED',
+                                    byName: p.name,
+                                    peer: p.id,
+                                    pointsEarned: pointsEarned,
+                                    newScore: p.score,
+                                    correctVal: this.currentProblem.answer
+                                });
+
+                                // Give a short visual pause on client screens, then deploy next question
+                                setTimeout(() => {
+                                    if (this.missionActive) this.generateAndBroadcastQuestion();
+                                }, 2000);
+                            }
+                        }
+                    }
+                });
+
+                conn.on('close', () => {
+                    if (this.players[conn.peer]) {
+                        this.players[conn.peer].status = 'TERPUTUS';
+                        this.renderLiveboard();
+                    }
+                    delete this.connections[conn.peer];
+                });
+            },
+
+            syncDuration(val) {
+                let mins = parseInt(val, 10);
+                if (isNaN(mins) || mins < 5) mins = 5;
+                if (mins > 60) mins = 60;
+                this.durationMinutes = mins;
+                document.getElementById('adminDurationSlider').value = mins;
+                document.getElementById('adminDurationInput').value = mins;
+                document.getElementById('adminDurationLabel').innerText = mins;
+
+                if (!this.missionActive) {
+                    this.remainingSeconds = mins * 60;
+                    this.updateCountdownUI();
+                }
+            },
+
+            updateCountdownUI() {
+                const m = Math.floor(this.remainingSeconds / 60).toString().padStart(2, '0');
+                const s = (this.remainingSeconds % 60).toString().padStart(2, '0');
+                document.getElementById('adminCountdownText').innerText = `${m}:${s}`;
+            },
+
+            broadcast(payload) {
+                Object.values(this.connections).forEach(conn => {
+                    if (conn && conn.open) {
+                        conn.send(payload);
+                    }
+                });
+            },
+
+            broadcastConfigUpdate() {
+                const op = document.getElementById('adminOpSelect').value;
+                this.broadcast({
+                    type: 'CONFIG_UPDATE',
+                    operation: op
+                });
+                App.showToast(`Operasi soal diubah ke: ${op.toUpperCase()}`, 'info');
+                if (this.missionActive) {
+                    this.generateAndBroadcastQuestion();
+                }
+            },
+
+            generateAndBroadcastQuestion() {
+                const op = document.getElementById('adminOpSelect').value;
+                this.currentProblem = MathGenerator.generate(op);
+                this.problemLocked = false;
+                this.broadcast({
+                    type: 'NEW_QUESTION',
+                    problem: this.currentProblem
+                });
+            },
+
+            startMission() {
+                this.missionActive = true;
+                this.remainingSeconds = this.durationMinutes * 60;
+                const op = document.getElementById('adminOpSelect').value;
+
+                // Reset player scores for new round
+                Object.values(this.players).forEach(p => {
+                    p.score = 0;
+                    p.correct = 0;
+                    p.wrong = 0;
+                    p.status = 'TEMPUR';
+                    p.lastAction = 'Misi Dimulai';
+                });
+                this.renderLiveboard();
+
+                this.broadcast({
+                    type: 'START_MISSION',
+                    operation: op,
+                    remainingSeconds: this.remainingSeconds
+                });
+
+                this.generateAndBroadcastQuestion();
+
+                document.getElementById('btnStartMission').disabled = true;
+                document.getElementById('btnStartMission').classList.add('opacity-50');
+                document.getElementById('btnStopMission').disabled = false;
+
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.timerInterval = setInterval(() => {
+                    this.remainingSeconds--;
+                    this.updateCountdownUI();
+
+                    // Periodic time sync
+                    if (this.remainingSeconds % 5 === 0) {
+                        this.broadcast({
+                            type: 'TIME_SYNC',
+                            remainingSeconds: this.remainingSeconds
+                        });
+                    }
+
+                    if (this.remainingSeconds <= 0) {
+                        this.stopMission();
+                    }
+                }, 1000);
+
+                SoundFX.playHitConfirm();
+                App.showToast('Misi Tempur Dimulai! Semua siswa kini memasuki arena.', 'success');
+            },
+
+            stopMission() {
+                this.missionActive = false;
+                if (this.timerInterval) clearInterval(this.timerInterval);
+
+                Object.values(this.players).forEach(p => {
+                    p.status = 'SELESAI';
+                });
+                this.renderLiveboard();
+
+                this.broadcast({
+                    type: 'STOP_MISSION'
+                });
+
+                document.getElementById('btnStartMission').disabled = false;
+                document.getElementById('btnStartMission').classList.remove('opacity-50');
+                document.getElementById('btnStopMission').disabled = true;
+
+                App.showToast('Misi dihentikan. Anda dapat mengunduh hasil dalam PDF.', 'warning');
+            },
+
+            renderLiveboard() {
+                const tbody = document.getElementById('liveboardTableBody');
+                const playerList = Object.values(this.players).sort((a, b) => b.score - a.score);
+                document.getElementById('connectedPlayersCount').innerText = `${playerList.length} Siswa`;
+
+                if (playerList.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="py-10 text-center text-slate-500 font-mono">
+                                Belum ada prajurit siswa yang bergabung. Bagikan Kode Room <b>${this.roomCode}</b> kepada siswa!
+                            </td>
+                        </tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = playerList.map((p, idx) => {
+                    const totalShots = p.correct + p.wrong;
+                    const acc = totalShots > 0 ? Math.round((p.correct / totalShots) * 100) : 0;
+                    const badgeClass = p.status === 'TEMPUR'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : p.status === 'TERPUTUS'
+                        ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+
+                    return `
+                        <tr class="hover:bg-slate-900/50 transition">
+                            <td class="py-3 px-3 font-tactical font-bold text-amber-400">#${idx + 1}</td>
+                            <td class="py-3 px-3 font-semibold text-white">${this.escapeHtml(p.name)}</td>
+                            <td class="py-3 px-3">
+                                <span class="text-[10px] font-mono px-2 py-0.5 rounded border ${badgeClass}">${p.status}</span>
+                            </td>
+                            <td class="py-3 px-3 font-mono text-xs text-cyan-300 max-w-xs truncate" title="${this.escapeHtml(p.currentQuestion)}">
+                                ${this.escapeHtml(p.currentQuestion)}
+                            </td>
+                            <td class="py-3 px-3 font-mono text-xs text-slate-300">${this.escapeHtml(p.lastAction || '-')}</td>
+                            <td class="py-3 px-3 text-center font-mono">
+                                <span class="text-emerald-400 font-bold">${p.correct}</span> / <span class="text-red-400">${p.wrong}</span>
+                            </td>
+                            <td class="py-3 px-3 text-center font-mono text-xs text-slate-300">${acc}%</td>
+                            <td class="py-3 px-3 text-right font-tactical font-bold text-base text-emerald-400">${p.score}</td>
+                        </tr>
+                    `;
+                }).join('');
+            },
+
+            copyRoomCode() {
+                const tempInput = document.createElement('input');
+                tempInput.value = this.roomCode;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                App.showToast(`Kode Room ${this.roomCode} berhasil disalin!`, 'success');
+            },
+
+            exportPDF() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                const opSelect = document.getElementById('adminOpSelect');
+                const opName = opSelect.options[opSelect.selectedIndex].text;
+                const nowStr = new Date().toLocaleString('id-ID');
+
+                doc.setFontSize(16);
+                doc.text('LAPORAN HASIL COUNTER STRIKE: MATH OPS', 14, 18);
+                doc.setFontSize(10);
+                doc.text(`Kode Room: ${this.roomCode}  |  Operasi: ${opName}`, 14, 26);
+                doc.text(`Durasi Misi: ${this.durationMinutes} Menit  |  Dicetak: ${nowStr}`, 14, 32);
+
+                const playerList = Object.values(this.players).sort((a, b) => b.score - a.score);
+                const rows = playerList.length > 0
+                    ? playerList.map((p, index) => {
+                        const total = p.correct + p.wrong;
+                        const acc = total > 0 ? `${Math.round((p.correct / total) * 100)}%` : '0%';
+                        return [
+                            index + 1,
+                            p.name,
+                            p.correct,
+                            p.wrong,
+                            acc,
+                            p.score,
+                            p.currentQuestion
+                        ];
+                    })
+                    : [['-', 'Belum ada data siswa', 0, 0, '0%', 0, '-']];
+
+                doc.autoTable({
+                    startY: 38,
+                    head: [['Rank', 'Nama Siswa', 'Benar', 'Salah', 'Akurasi', 'Skor Total', 'Soal Terakhir']],
+                    body: rows,
+                    theme: 'grid',
+                    headStyles: { fillColor: [245, 158, 11], textColor: [15, 23, 42] }
+                });
+
+                doc.save(`Laporan_CS_MathOps_${this.roomCode}.pdf`);
+                App.showToast('Laporan PDF berhasil diunduh!', 'success');
+            },
+
+            escapeHtml(str) {
+                return String(str || '').replace(/[&<>"']/g, s => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[s]));
+            },
+
+            cleanup() {
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                if (this.peer) {
+                    this.peer.destroy();
+                    this.peer = null;
+                }
+                this.connections = {};
+                this.players = {};
+                this.missionActive = false;
+            }
+        };
+
+        /* =========================================================
+           5. PLAYER / CLIENT CONTROLLER (PEERJS CLIENT & SOLO)
+           ========================================================= */
+        const PlayerController = {
+            isSolo: false,
+            peer: null,
+            conn: null,
+            playerName: '',
+            roomCode: '',
+            activeOperation: 'semua',
+
+            setupLobbyUI(isSoloMode) {
+                this.isSolo = isSoloMode;
+                document.getElementById('playerWaitingBox').classList.add('hidden');
+                document.getElementById('btnJoinOrStart').disabled = false;
+
+                if (isSoloMode) {
+                    document.getElementById('lobbyModeBadge').innerText = 'SIMULASI LATIHAN MANDIRI';
+                    document.getElementById('lobbyTitle').innerText = 'KONFIGURASI SOLO OPS';
+                    document.getElementById('multiplayerCodeGroup').classList.add('hidden');
+                    document.getElementById('soloConfigGroup').classList.remove('hidden');
+                    document.getElementById('btnJoinText').innerText = 'MULAI PERTEMPURAN SOLO';
+                } else {
+                    document.getElementById('lobbyModeBadge').innerText = 'MULTIPLAYER PEERJS';
+                    document.getElementById('lobbyTitle').innerText = 'HUBUNGKAN KE ADMIN';
+                    document.getElementById('multiplayerCodeGroup').classList.remove('hidden');
+                    document.getElementById('soloConfigGroup').classList.add('hidden');
+                    document.getElementById('btnJoinText').innerText = 'GABUNG KE MARKAS';
+                }
+            },
+
+            submitLobby() {
+                const nameInput = document.getElementById('playerNameInput').value.trim();
+                if (!nameInput) {
+                    App.showToast('Masukkan Nama Prajurit / Siswa terlebih dahulu!', 'warning');
+                    return;
+                }
+                this.playerName = nameInput;
+
+                if (this.isSolo) {
+                    const op = document.getElementById('soloOpSelect').value;
+                    const mins = parseInt(document.getElementById('soloDurationSlider').value, 10) || 10;
+                    this.activeOperation = op;
+                    App.switchView('viewGameArena');
+                    GameEngine.startSession({
+                        playerName: this.playerName,
+                        operation: op,
+                        durationSeconds: mins * 60
+                    });
+                } else {
+                    const code = document.getElementById('playerRoomCodeInput').value.trim().toUpperCase();
+                    if (!code) {
+                        App.showToast('Masukkan Kode Room dari Guru/Admin!', 'warning');
+                        return;
+                    }
+                    this.roomCode = code;
+                    this.connectToAdmin(code);
+                }
+            },
+
+            connectToAdmin(code) {
+                this.cleanup();
+                document.getElementById('btnJoinOrStart').disabled = true;
+                document.getElementById('playerWaitingBox').classList.remove('hidden');
+                document.getElementById('playerWaitingText').innerText = `Menghubungi Markas Komando (${code})...`;
+
+                this.peer = new Peer();
+
+                this.peer.on('open', () => {
+                    const hostId = `CSMATH-HOST-${code}`;
+                    this.conn = this.peer.connect(hostId, { reliable: true });
+
+                    this.conn.on('open', () => {
+                        document.getElementById('playerWaitingText').innerText = 'Terhubung ke Markas! Menunggu Admin memulai misi...';
+                        App.showToast('Berhasil terhubung ke Admin!', 'success');
+
+                        this.conn.send({
+                            type: 'REGISTER_PLAYER',
+                            name: this.playerName
+                        });
+                    });
+
+                    this.conn.on('data', (data) => {
+                        this.handleServerMessage(data);
+                    });
+
+                    this.conn.on('close', () => {
+                        App.showToast('Koneksi dengan Markas Admin terputus.', 'error');
+                    });
+                });
+
+                this.peer.on('error', () => {
+                    document.getElementById('btnJoinOrStart').disabled = false;
+                    document.getElementById('playerWaitingText').innerText = 'Gagal menemukan Kode Room tersebut. Periksa kembali kode dari Admin.';
+                    App.showToast('Kode Room tidak ditemukan atau koneksi gagal.', 'error');
+                });
+            },
+
+            handleServerMessage(data) {
+                if (!data || !data.type) return;
+
+                if (data.type === 'ROOM_STATE') {
+                    this.activeOperation = data.operation || 'semua';
+                    if (data.missionActive) {
+                        App.switchView('viewGameArena');
+                        GameEngine.startSession({
+                            playerName: this.playerName,
+                            operation: this.activeOperation,
+                            durationSeconds: data.remainingSeconds || 600,
+                            isMultiplayer: true
+                        });
+                    }
+                } else if (data.type === 'START_MISSION') {
+                    this.activeOperation = data.operation || 'semua';
+                    App.switchView('viewGameArena');
+                    GameEngine.startSession({
+                        playerName: this.playerName,
+                        operation: this.activeOperation,
+                        durationSeconds: data.remainingSeconds || 600,
+                        isMultiplayer: true
+                    });
+                } else if (data.type === 'NEW_QUESTION') {
+                    GameEngine.applyExternalQuestion(data.problem);
+                } else if (data.type === 'QUESTION_SOLVED') {
+                    GameEngine.handleQuestionSolvedBySomeone(data);
+                } else if (data.type === 'CONFIG_UPDATE') {
+                    this.activeOperation = data.operation || 'semua';
+                    if (!GameEngine.isMultiplayerRace) {
+                        GameEngine.updateOperationMode(this.activeOperation);
+                    } else {
+                        document.getElementById('hudOpBadge').innerText = `MODE: ${this.activeOperation.toUpperCase()}`;
+                    }
+                } else if (data.type === 'TIME_SYNC') {
+                    if (typeof data.remainingSeconds === 'number') {
+                        GameEngine.remainingSeconds = data.remainingSeconds;
+                    }
+                } else if (data.type === 'STOP_MISSION') {
+                    GameEngine.finishGame();
+                }
+            },
+
+            sendTelemetry(telemetryData) {
+                if (this.conn && this.conn.open) {
+                    this.conn.send({
+                        type: 'PLAYER_TELEMETRY',
+                        name: this.playerName,
+                        ...telemetryData
+                    });
+                }
+            },
+
+            sendClaim(questionText) {
+                if (this.conn && this.conn.open) {
+                    this.conn.send({
+                        type: 'CLAIM_ANSWER',
+                        question: questionText
+                    });
+                }
+            },
+
+            downloadPersonalPDF() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const total = GameEngine.correctCount + GameEngine.wrongCount;
+                const acc = total > 0 ? Math.round((GameEngine.correctCount / total) * 100) : 0;
+
+                doc.setFontSize(18);
+                doc.text('SERTIFIKAT TEMPUR - CS: MATH OPS', 14, 22);
+                doc.setFontSize(12);
+                doc.text(`Nama Prajurit (Siswa): ${this.playerName}`, 14, 34);
+                doc.text(`Mode Operasi: ${this.activeOperation.toUpperCase()}`, 14, 42);
+                doc.text(`Tanggal Selesai: ${new Date().toLocaleString('id-ID')}`, 14, 50);
+
+                doc.autoTable({
+                    startY: 58,
+                    head: [['Skor Akhir', 'Target Benar', 'Tembakan Meleset', 'Akurasi']],
+                    body: [[GameEngine.score, GameEngine.correctCount, GameEngine.wrongCount, `${acc}%`]],
+                    theme: 'grid',
+                    headStyles: { fillColor: [6, 182, 212] }
+                });
+
+                doc.save(`Sertifikat_CSMath_${this.playerName.replace(/\s+/g, '_')}.pdf`);
+            },
+
+            cleanup() {
+                if (this.conn) {
+                    this.conn.close();
+                    this.conn = null;
+                }
+                if (this.peer) {
+                    this.peer.destroy();
+                    this.peer = null;
+                }
+            }
+        };
+
+        /* =========================================================
+           6. COUNTER STRIKE FPS CANVAS ENGINE
+           ========================================================= */
+        const GameEngine = {
+            canvas: null,
+            ctx: null,
+            running: false,
+            animFrameId: null,
+            timerInterval: null,
+
+            isMultiplayerRace: false,
+            waitingForNextQuestion: false,
+
+            // Player Session Stats
+            playerName: 'PRAJURIT',
+            operationMode: 'semua',
+            remainingSeconds: 600,
+            score: 0,
+            streak: 0,
+            correctCount: 0,
+            wrongCount: 0,
+            hp: 100,
+            ammo: 30,
+
+            // Active Math Question & Targets
+            currentProblem: null,
+            targets: [],
+            particles: [],
+
+            // Crosshair & Weapon Recoil State
+            mouseX: 400,
+            mouseY: 250,
+            recoilOffset: 0,
+            muzzleFlashAlpha: 0,
+
+            initCanvas() {
+                if (this.canvas) return;
+                this.canvas = document.getElementById('csCanvas');
+                this.ctx = this.canvas.getContext('2d');
+
+                const resizeCanvas = () => {
+                    const wrapper = document.getElementById('canvasWrapper');
+                    if (!wrapper) return;
+                    this.canvas.width = wrapper.clientWidth;
+                    this.canvas.height = wrapper.clientHeight;
+                    this.mouseX = this.canvas.width / 2;
+                    this.mouseY = this.canvas.height / 2;
+                    this.repositionTargets();
+                };
+
+                window.addEventListener('resize', resizeCanvas);
+                resizeCanvas();
+
+                // Mouse movement for crosshair & weapon sway
+                this.canvas.addEventListener('mousemove', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.mouseX = e.clientX - rect.left;
+                    this.mouseY = e.clientY - rect.top;
+                });
+
+                // Mouse click to shoot
+                this.canvas.addEventListener('mousedown', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.mouseX = e.clientX - rect.left;
+                    this.mouseY = e.clientY - rect.top;
+                    this.fireAtPosition(this.mouseX, this.mouseY);
+                });
+
+                // Touch support for mobile tablets/phones
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.mouseX = touch.clientX - rect.left;
+                    this.mouseY = touch.clientY - rect.top;
+                    this.fireAtPosition(this.mouseX, this.mouseY);
+                }, { passive: false });
+            },
+
+            startSession({ playerName, operation, durationSeconds, isMultiplayer = false }) {
+                this.initCanvas();
+                this.stopLoop();
+
+                const wrapper = document.getElementById('canvasWrapper');
+                this.canvas.width = wrapper.clientWidth;
+                this.canvas.height = wrapper.clientHeight;
+
+                this.playerName = playerName || 'PRAJURIT';
+                this.operationMode = operation || 'semua';
+                this.remainingSeconds = durationSeconds || 600;
+                this.score = 0;
+                this.streak = 0;
+                this.correctCount = 0;
+                this.wrongCount = 0;
+                this.hp = 100;
+                this.ammo = 30;
+                this.particles = [];
+                this.isMultiplayerRace = isMultiplayer;
+                this.waitingForNextQuestion = isMultiplayer;
+
+                document.getElementById('modalGameOver').classList.add('hidden');
+                document.getElementById('hudPlayerName').innerText = this.playerName;
+                document.getElementById('hudOpBadge').innerText = `MODE: ${this.operationMode.toUpperCase()}`;
+
+                this.updateHUD();
+                
+                if (this.isMultiplayerRace) {
+                    document.getElementById('hudQuestionCategory').innerText = "MENUNGGU KOMANDO MARKAS...";
+                    document.getElementById('hudQuestionText').innerText = "Bersiaplah untuk persaingan...";
+                    this.targets = [];
+                    this.renderQuickFireButtons();
+                } else {
+                    this.spawnNextQuestion('Misi Dimulai');
+                }
+
+                this.running = true;
+                this.loop();
+
+                this.timerInterval = setInterval(() => {
+                    if (!this.running) return;
+                    this.remainingSeconds--;
+                    this.updateTimerDisplay();
+                    if (this.remainingSeconds <= 0) {
+                        this.finishGame();
+                    }
+                }, 1000);
+            },
+
+            updateOperationMode(newOp) {
+                this.operationMode = newOp;
+                document.getElementById('hudOpBadge').innerText = `MODE: ${newOp.toUpperCase()}`;
+                if (!this.isMultiplayerRace) {
+                    this.spawnNextQuestion(`Operasi Diubah Admin (${newOp})`);
+                }
+            },
+
+            spawnNextQuestion(lastActionNote = '') {
+                this.currentProblem = MathGenerator.generate(this.operationMode);
+                document.getElementById('hudQuestionCategory').innerText = `${this.currentProblem.category} — BIDIK TERORIS YANG MEMBAWA JAWABAN BENAR!`;
+                document.getElementById('hudQuestionText').innerText = this.currentProblem.question;
+
+                // Create 4 tactical terrorist targets across 4 bunker lanes
+                const count = 4;
+                const w = this.canvas.width || 800;
+                const h = this.canvas.height || 450;
+                const horizonY = h * 0.62;
+
+                this.targets = this.currentProblem.options.map((val, idx) => {
+                    const laneWidth = w / count;
+                    const baseX = laneWidth * idx + laneWidth * 0.5;
+                    return {
+                        index: idx,
+                        value: val,
+                        isCorrect: val === this.currentProblem.answer,
+                        baseX: baseX,
+                        x: baseX,
+                        y: horizonY,
+                        radius: Math.max(32, Math.min(48, w * 0.055)),
+                        bobPhase: Math.random() * Math.PI * 2,
+                        strafeSpeed: 0.8 + Math.random() * 0.7,
+                        alive: true
+                    };
+                });
+
+                this.renderQuickFireButtons();
+
+                // Broadcast live question & score to Admin Liveboard
+                PlayerController.sendTelemetry({
+                    score: this.score,
+                    correct: this.correctCount,
+                    wrong: this.wrongCount,
+                    currentQuestion: this.currentProblem.question,
+                    lastAction: lastActionNote || 'Mengerjakan Soal Baru',
+                    status: 'TEMPUR'
+                });
+            },
+
+            repositionTargets() {
+                if (!this.targets || !this.canvas) return;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const horizonY = h * 0.62;
+                const laneWidth = w / 4;
+
+                this.targets.forEach((t, idx) => {
+                    t.baseX = laneWidth * idx + laneWidth * 0.5;
+                    t.y = horizonY;
+                    t.radius = Math.max(32, Math.min(48, w * 0.055));
+                });
+            },
+
+            applyExternalQuestion(problem) {
+                this.waitingForNextQuestion = false;
+                this.currentProblem = problem;
+                document.getElementById('hudQuestionCategory').innerText = `${this.currentProblem.category} — SIAPA CEPAT DIA DAPAT!`;
+                document.getElementById('hudQuestionText').innerText = this.currentProblem.question;
+
+                const count = 4;
+                const w = this.canvas.width || 800;
+                const h = this.canvas.height || 450;
+                const horizonY = h * 0.62;
+
+                this.targets = this.currentProblem.options.map((val, idx) => {
+                    const laneWidth = w / count;
+                    const baseX = laneWidth * idx + laneWidth * 0.5;
+                    return {
+                        index: idx,
+                        value: val,
+                        isCorrect: val === this.currentProblem.answer,
+                        baseX: baseX,
+                        x: baseX,
+                        y: horizonY,
+                        radius: Math.max(32, Math.min(48, w * 0.055)),
+                        bobPhase: Math.random() * Math.PI * 2,
+                        strafeSpeed: 0.8 + Math.random() * 0.7,
+                        alive: true
+                    };
+                });
+                this.renderQuickFireButtons();
+            },
+
+            handleQuestionSolvedBySomeone(data) {
+                this.waitingForNextQuestion = true;
+                this.targets.forEach(t => t.alive = false);
+                this.renderQuickFireButtons();
+                
+                if (PlayerController.peer && data.peer === PlayerController.peer.id) {
+                    // Sayalah pemenangnya
+                    this.streak++;
+                    this.score = data.newScore;
+                    this.correctCount++;
+                    SoundFX.playHitConfirm();
+                    this.showFloatingBanner(`TERCEPAT! +${data.pointsEarned}`, 'text-emerald-400');
+                } else {
+                    // Pemain lain yang menjawab duluan
+                    this.streak = 0;
+                    SoundFX.playBeep(400, 0.2, 'square');
+                    this.showFloatingBanner(`DIJAWAB OLEH ${data.byName.toUpperCase()}`, 'text-cyan-400');
+                }
+                this.updateHUD();
+            },
+
+            renderQuickFireButtons() {
+                const container = document.getElementById('quickFireButtons');
+                if (!container || !this.targets || this.waitingForNextQuestion) {
+                    if (container) container.innerHTML = '';
+                    return;
+                }
+                container.innerHTML = this.targets.map((t, idx) => {
+                    if (!t.alive) return '';
+                    return `
+                    <button onclick="GameEngine.fireAtTargetIndex(${idx})" 
+                        class="px-3.5 py-1.5 rounded bg-slate-800 hover:bg-amber-500 hover:text-slate-950 border border-amber-500/50 font-tactical font-bold text-sm text-amber-400 transition shadow">
+                        [${idx + 1}] ${t.value}
+                    </button>
+                    `;
+                }).join('');
+            },
+
+            fireAtTargetIndex(idx) {
+                if (!this.running || !this.targets[idx] || !this.targets[idx].alive || this.waitingForNextQuestion) return;
+                const t = this.targets[idx];
+                this.mouseX = t.x;
+                this.mouseY = t.y - t.radius * 0.3;
+                this.fireAtPosition(this.mouseX, this.mouseY, t);
+            },
+
+            fireAtPosition(x, y, forcedTarget = null) {
+                if (!this.running || this.waitingForNextQuestion) return;
+
+                if (this.ammo <= 0) {
+                    this.reloadWeapon();
+                    return;
+                }
+
+                this.ammo--;
+                this.recoilOffset = 18;
+                this.muzzleFlashAlpha = 0.85;
+                SoundFX.playGunshot();
+
+                // Check hit detection
+                let hitTarget = forcedTarget;
+                if (!hitTarget) {
+                    for (const t of this.targets) {
+                        if (!t.alive) continue;
+                        const dx = x - t.x;
+                        const dy = y - (t.y - t.radius * 0.25);
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist <= t.radius * 1.25) {
+                            hitTarget = t;
+                            break;
+                        }
+                    }
+                }
+
+                if (hitTarget) {
+                    this.spawnExplosionParticles(hitTarget.x, hitTarget.y - 15, hitTarget.isCorrect ? '#10b981' : '#ef4444');
+
+                    if (hitTarget.isCorrect) {
+                        if (this.isMultiplayerRace) {
+                            // Mode kompetisi multiplayer (kirim klaim ke server)
+                            this.waitingForNextQuestion = true;
+                            document.getElementById('quickFireButtons').innerHTML = ''; // Hide buttons
+                            PlayerController.sendClaim(this.currentProblem.question);
+                            this.showFloatingBanner(`MEMVALIDASI...`, 'text-amber-400');
+                            SoundFX.playHitConfirm();
+                        } else {
+                            // Mode latihan solo (berikan poin langsung)
+                            this.streak++;
+                            const bonus = Math.min(50, (this.streak - 1) * 10);
+                            const pointsEarned = 100 + bonus;
+                            this.score += pointsEarned;
+                            this.correctCount++;
+                            SoundFX.playHitConfirm();
+                            this.showFloatingBanner(`HEADSHOT BENAR! +${pointsEarned}`, 'text-emerald-400');
+                            this.updateHUD();
+                            this.spawnNextQuestion(`Benar (${hitTarget.value}) +${pointsEarned}`);
+                        }
+                    } else {
+                        // Wrong target shot
+                        hitTarget.alive = false;
+                        this.renderQuickFireButtons();
+                        this.streak = 0;
+                        this.score = Math.max(0, this.score - 25);
+                        this.wrongCount++;
+                        this.hp = Math.max(10, this.hp - 10);
+                        SoundFX.playWrongHit();
+                        this.showFloatingBanner(`SALAH TARGET (${hitTarget.value})! -25`, 'text-red-400');
+                        this.updateHUD();
+
+                        PlayerController.sendTelemetry({
+                            score: this.score,
+                            correct: this.correctCount,
+                            wrong: this.wrongCount,
+                            currentQuestion: this.currentProblem.question,
+                            lastAction: `Meleset tembak ${hitTarget.value} (-25)`,
+                            status: 'TEMPUR'
+                        });
+                    }
+                } else {
+                    // Bullet spark on wall
+                    this.spawnExplosionParticles(x, y, '#f59e0b', 8);
+                    this.updateHUD();
+                }
+
+                if (this.ammo === 0) {
+                    setTimeout(() => this.reloadWeapon(), 250);
+                }
+            },
+
+            reloadWeapon() {
+                this.ammo = 30;
+                SoundFX.playReload();
+                this.updateHUD();
+            },
+
+            spawnExplosionParticles(x, y, color, count = 22) {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 1.5 + Math.random() * 5.5;
+                    this.particles.push({
+                        x, y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        life: 1.0,
+                        color
+                    });
+                }
+            },
+
+            showFloatingBanner(text, colorClass) {
+                const overlay = document.getElementById('hudFeedbackOverlay');
+                const el = document.createElement('div');
+                el.className = `font-tactical font-black text-xl sm:text-3xl tracking-wider drop-shadow-lg ${colorClass} animate-bounce`;
+                el.innerText = text;
+                overlay.innerHTML = '';
+                overlay.appendChild(el);
+                setTimeout(() => {
+                    if (overlay.contains(el)) el.remove();
+                }, 850);
+            },
+
+            updateHUD() {
+                document.getElementById('hudScore').innerText = this.score;
+                document.getElementById('hudStreak').innerText = `${this.streak}x`;
+                document.getElementById('hudHP').innerText = this.hp;
+                document.getElementById('hudAmmo').innerText = `${this.ammo} / ∞`;
+                this.updateTimerDisplay();
+            },
+
+            updateTimerDisplay() {
+                const m = Math.floor(Math.max(0, this.remainingSeconds) / 60).toString().padStart(2, '0');
+                const s = (Math.max(0, this.remainingSeconds) % 60).toString().padStart(2, '0');
+                document.getElementById('hudTimer').innerText = `${m}:${s}`;
+            },
+
+            loop() {
+                if (!this.running) return;
+                this.renderScene();
+                this.animFrameId = requestAnimationFrame(() => this.loop());
+            },
+
+            renderScene() {
+                const ctx = this.ctx;
+                const w = this.canvas.width;
+                const h = this.canvas.height;
+                const horizon = h * 0.62;
+
+                // 1. Sky / Tactical Dust2 Desert Night Sky
+                const skyGrad = ctx.createLinearGradient(0, 0, 0, horizon);
+                skyGrad.addColorStop(0, '#09131f');
+                skyGrad.addColorStop(1, '#1e293b');
+                ctx.fillStyle = skyGrad;
+                ctx.fillRect(0, 0, w, horizon);
+
+                // Distant Tactical Buildings Silhouette
+                ctx.fillStyle = '#0f172a';
+                for (let i = 0; i < 6; i++) {
+                    const bw = w / 6;
+                    const bh = 45 + (i % 3) * 22;
+                    ctx.fillRect(i * bw, horizon - bh, bw - 8, bh);
+                }
+
+                // 2. Ground / Tactical Arena Floor with Perspective Grid
+                const groundGrad = ctx.createLinearGradient(0, horizon, 0, h);
+                groundGrad.addColorStop(0, '#1e2530');
+                groundGrad.addColorStop(1, '#0b0f17');
+                ctx.fillStyle = groundGrad;
+                ctx.fillRect(0, horizon, w, h - horizon);
+
+                ctx.strokeStyle = 'rgba(6, 182, 212, 0.14)';
+                ctx.lineWidth = 1;
+                for (let i = -4; i <= 8; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(w * 0.5 + i * (w * 0.12), horizon);
+                    ctx.lineTo(w * 0.5 + i * (w * 0.35), h);
+                    ctx.stroke();
+                }
+
+                // 3. Draw Terrorist Math Targets behind Sandbag Bunkers
+                const now = performance.now() * 0.0025;
+                this.targets.forEach((t) => {
+                    const swayX = Math.sin(now * t.strafeSpeed + t.bobPhase) * 18;
+                    const bobY = Math.cos(now * 2 + t.bobPhase) * 4;
+                    t.x = t.baseX + swayX;
+                    const drawY = t.y + bobY;
+                    const r = t.radius;
+
+                    if (t.alive) {
+                        // Terrorist Silhouette Torso
+                        ctx.fillStyle = '#1e293b';
+                        ctx.strokeStyle = '#f59e0b';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.roundRect(t.x - r * 0.85, drawY - r * 1.1, r * 1.7, r * 1.35, 10);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Helmet / Head
+                        ctx.fillStyle = '#334155';
+                        ctx.beginPath();
+                        ctx.arc(t.x, drawY - r * 1.45, r * 0.48, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Red Tactical Visor
+                        ctx.fillStyle = '#ef4444';
+                        ctx.fillRect(t.x - r * 0.3, drawY - r * 1.52, r * 0.6, r * 0.14);
+
+                        // Math Answer Chest Plate
+                        ctx.fillStyle = '#090d16';
+                        ctx.strokeStyle = '#38bdf8';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.roundRect(t.x - r * 0.72, drawY - r * 0.88, r * 1.44, r * 0.88, 6);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Answer Number Text
+                        ctx.fillStyle = '#f8fafc';
+                        ctx.font = `900 ${Math.round(r * 0.52)}px Orbitron, sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(t.value, t.x, drawY - r * 0.44);
+                    }
+
+                    // Front Sandbag / Bunker Cover
+                    ctx.fillStyle = '#293548';
+                    ctx.strokeStyle = '#475569';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.roundRect(t.baseX - r * 1.1, horizon + 6, r * 2.2, r * 0.55, 8);
+                    ctx.fill();
+                    ctx.stroke();
+                });
+
+                // 4. Particles (Sparks & Hits)
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= 0.04;
+                    if (p.life <= 0) {
+                        this.particles.splice(i, 1);
+                        continue;
+                    }
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+
+                // 5. First-Person Weapon Barrel (Bottom Right CS Perspective)
+                if (this.recoilOffset > 0) this.recoilOffset *= 0.78;
+                const gunX = w * 0.72 + (this.mouseX - w * 0.5) * 0.12;
+                const gunY = h - 10 + this.recoilOffset;
+
+                // Muzzle Flash
+                if (this.muzzleFlashAlpha > 0.05) {
+                    ctx.save();
+                    ctx.globalAlpha = this.muzzleFlashAlpha;
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath();
+                    ctx.arc(gunX - 55, gunY - 105, 32, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                    this.muzzleFlashAlpha *= 0.65;
+                }
+
+                // Gun Body & Barrel
+                ctx.save();
+                ctx.translate(gunX, gunY);
+                ctx.rotate(-0.42);
+                ctx.fillStyle = '#1e293b';
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 2;
+                ctx.fillRect(-25, -135, 36, 150);
+                ctx.strokeRect(-25, -135, 36, 150);
+                // Tactical Rail Accent
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillRect(-15, -105, 8, 55);
+                ctx.restore();
+
+                // 6. Dynamic CS Crosshair at Mouse Position
+                const cx = this.mouseX;
+                const cy = this.mouseY;
+                const spread = 10 + this.recoilOffset * 0.8;
+
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                // Left
+                ctx.moveTo(cx - spread - 10, cy);
+                ctx.lineTo(cx - spread, cy);
+                // Right
+                ctx.moveTo(cx + spread, cy);
+                ctx.lineTo(cx + spread + 10, cy);
+                // Top
+                ctx.moveTo(cx, cy - spread - 10);
+                ctx.lineTo(cx, cy - spread);
+                // Bottom
+                ctx.moveTo(cx, cy + spread);
+                ctx.lineTo(cx, cy + spread + 10);
+                ctx.stroke();
+
+                // Center Dot
+                ctx.fillStyle = '#f59e0b';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
+                ctx.fill();
+            },
+
+            finishGame() {
+                this.stopLoop();
+                const total = this.correctCount + this.wrongCount;
+                const acc = total > 0 ? Math.round((this.correctCount / total) * 100) : 0;
+
+                document.getElementById('finalScoreText').innerText = this.score;
+                document.getElementById('finalAccuracyText').innerText = `${acc}%`;
+                document.getElementById('finalCorrectText').innerText = this.correctCount;
+                document.getElementById('finalWrongText').innerText = this.wrongCount;
+                document.getElementById('modalGameOver').classList.remove('hidden');
+
+                PlayerController.sendTelemetry({
+                    score: this.score,
+                    correct: this.correctCount,
+                    wrong: this.wrongCount,
+                    currentQuestion: 'Misi Selesai',
+                    lastAction: 'Menyelesaikan Pertempuran',
+                    status: 'SELESAI'
+                });
+            },
+
+            stopLoop() {
+                this.running = false;
+                if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
+                if (this.timerInterval) clearInterval(this.timerInterval);
+            }
+        };
+
+        // Keyboard shortcuts (1, 2, 3, 4 to shoot targets, R to reload)
+        window.addEventListener('keydown', (e) => {
+            if (!GameEngine.running) return;
+            if (['1', '2', '3', '4'].includes(e.key)) {
+                GameEngine.fireAtTargetIndex(parseInt(e.key, 10) - 1);
+            } else if (e.key.toLowerCase() === 'r') {
+                GameEngine.reloadWeapon();
+            }
+        });
+    </script>
+</body>
+</html>
